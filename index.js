@@ -1,9 +1,12 @@
 require('dotenv').config();
 const Sequelize = require('sequelize');
-const db = require('./models/image.model');
 const AWS = require('aws-sdk');
 const fs = require('fs');
+const express = require('express');
+const db = require('./models/image.model');
 const seedData = require('./seed');
+
+const app = express();
 
 const s3 = new AWS.S3({
     accessKeyId: process.env.ACCESS_KEY_ID,
@@ -88,6 +91,36 @@ async function migrateImages() {
     migrationRunning = false;
 }
 
-// seedData(Images)
+app.get('/initMigration', (req, res) => {
+    if (migrationRunning) {
+        return res.status(400).send('Migration already running');
+    }
+    migrateImages();
+    return res.send('MIgration started');
+});
 
-migrateImages();
+app.get('/getMIgrationStatus', async (req, res) => {
+    try {
+        const data = await Images.findAll({
+            attributes: ['name', 'url', 'is_migrated'],
+            where: {
+                retired: {
+                    [Sequelize.Op.eq]: false,
+                },
+            },
+        });
+        res.send(data);   
+    } catch (error) {
+        res.status(500).send('Something went wrong')
+    }
+});
+
+app.get('/seedData', (req, res) => {
+    // for dev only
+    seedData(Images);
+    return res.send('Seeding started');
+});
+
+app.listen(process.env.PORT, () => {
+    console.log(`Example app listening at http://localhost:${process.env.PORT}`);
+});
